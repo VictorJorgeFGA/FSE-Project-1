@@ -1,0 +1,14 @@
+{
+  "lamp1": 26,
+  "lamp2": 19,
+  "air_conditioner": 13,
+  "projector": 6,
+  "alarm": 5,
+  "presence_sensor": 0,
+  "smoke_sensor": 11,
+  "window_sensor1": 9,
+  "window_sensor2": 10,
+  "people_in_sensor": 22,
+  "people_out_sensor": 27,
+  "temperature_humidity_sensor": 18
+}
