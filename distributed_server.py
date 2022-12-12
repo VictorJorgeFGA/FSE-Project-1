@@ -14,5 +14,5 @@ if len(sys.argv) < 2:
   exit(1)
 
 devices = initialize_sensors(sys.argv[1])
-sensor = DHT22(devices['temperature_humidity_sensor'])
+sensor = DHT22(devices['DHT22'])
 print(sensor.read())

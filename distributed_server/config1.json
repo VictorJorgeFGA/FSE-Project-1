@@ -10,5 +10,7 @@
   "SPor": 16,
   "SC_IN": 20,
   "SC_OUT": 21,
-  "DHT22": 4
+  "DHT22": 4,
+  "main_server_address": "127.0.0.1",
+  "main_server_port": "3000"
 }
