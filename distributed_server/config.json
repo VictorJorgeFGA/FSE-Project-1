@@ -12,5 +12,5 @@
   "SC_OUT": 27,
   "DHT22": 18,
   "main_server_address": "127.0.0.1",
-  "main_server_port": 3000
+  "main_server_port": 3030
 }

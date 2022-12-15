@@ -64,9 +64,8 @@ void MainServer::shut_down()
 void MainServer::run()
 {
     m_server_is_running = true;
+    display_current_states();
     while (m_server_is_running) {
-        display_current_states();
-
         fd_set temp_file_descriptors_set = m_file_descriptors_set;
         int fds_amount = select(FD_SETSIZE, &temp_file_descriptors_set, nullptr, nullptr, nullptr);
 
@@ -143,20 +142,20 @@ MainServer::~MainServer()
 void MainServer::handle_user_input()
 {
     m_ui_alert_message = "";
-    std::string cmd;
-    std::getline(std::cin, cmd);
-
+    std::string m_command_buffer;
+    std::cin >> m_command_buffer;
     std::vector<std::string> split_cmd;
-    std::stringstream stream_data(cmd);
+    std::stringstream stream_data(m_command_buffer);
 
     std::string tmp_str;
     while (std::getline(stream_data, tmp_str, ' '))
         split_cmd.push_back(tmp_str);
 
-    if (cmd == "toggle securitysystem") {
+    if (m_command_buffer == "toggle securitysystem") {
         m_security_system = !m_security_system;
         m_ui_alert_message = "Security System is now " + bool_to_on_off(m_security_system);
     }
+    else if(m_command_buffer == "refresh" || m_command_buffer == "r") {}
     else if ((int) split_cmd.size() == 3) {
         if (is_a_toggleable_device(split_cmd[1])) {
             m_ui_alert_message = "Ok";
@@ -165,8 +164,9 @@ void MainServer::handle_user_input()
         }
     }
     else {
-        m_ui_alert_message = "\033[0;31mERROR\033[0m: Unknow command '" + cmd + "'";
+        m_ui_alert_message = "\033[0;31mERROR\033[0m: Unknown command '" + m_command_buffer + "'";
     }
+    display_current_states();
 }
 
 void MainServer::display_current_states()
@@ -175,9 +175,9 @@ void MainServer::display_current_states()
     std::cout << " _______________________________________________________________________________________________________________________" << std::endl;
     printf("[     MAIN SERVER  | PID: %6d |  Running on Port: %6d                                                             ]\n", getpid(), m_port);
     std::cout << " ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" << std::endl;
-    std::cout << " ________________" << std::endl;
-    std::cout << "| Rooms' devices |" << std::endl;
-    std::cout << "|________________|______________________________________________________________________________________________________" << std::endl;
+    std::cout << " ________________                                                 ________________" << std::endl;
+    std::cout << "| Rooms' devices |                                               | Room's sensors |" << std::endl;
+    std::cout << "|________________|_______________________________________________|________________|_____________________________________" << std::endl;
     std::cout << "|        | lamp01 | lamp02 | air_conditioner | projector | alarm | smoke_sensor | presence_sensor | window01 | window02 |" << std::endl;
     std::cout << "|¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨|" << std::endl;
     for (int i = 0; i < (int) m_distributed_servers.size(); i++) {
@@ -229,7 +229,9 @@ void MainServer::display_current_states()
 
     std::cout << "\tCommands:" << std::endl;
     std::cout << "\t\ttoggle <device> <room>            | <device> The available devices is presented on the Room's devices" << std::endl;
-    std::cout << "\t\ttoggle securitysystem             | table above. <room> the room number. Example: toggle lamp01 0" << std::endl << std::endl;
+    std::cout << "\t\t                                  | table above. <room> the room number. Example: toggle lamp01 0." << std::endl << std::endl;
+    std::cout << "\t\ttoggle securitysystem             | Enable the security system if it's currently disabled and vice versa." << std::endl << std::endl;
+    std::cout << "\t\trefresh                           | Or simply 'r', refreshes the devices information on screen." << std::endl << std::endl;
     printf("Enter your command:\n");
 }
 

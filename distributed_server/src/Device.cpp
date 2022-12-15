@@ -6,13 +6,9 @@
 #include <wiringPi.h>
 #endif
 
-#include "Helpers.hpp"
-
-Device::Device(int t_bcm_pin, int t_mode)
+Device::Device(int t_pin, int t_mode, int t_refresh_time_delta):
+m_pin(t_pin), m_mode(t_mode), m_last_state(0), m_refresh_time_delta(t_refresh_time_delta)
 {
-    m_pin = Helpers::gpio_bcm_to_wiringPi_pin(t_bcm_pin);
-    m_mode = t_mode;
-    m_last_state = 0;
     #ifndef _DEVELOPMENT_MODE_
     pinMode(m_pin, m_mode);
     if (m_mode == OUTPUT)
@@ -29,11 +25,11 @@ void Device::set_state(int t_new_state)
 {
     #ifndef _DEVELOPMENT_MODE_
     if (m_mode != OUTPUT) {
-        std::cerr << "\033[0;33mWARNING:\033[0m Attempt to write on input device pin: " << m_pin << std::endl;
+        std::cerr << "\033[103m\033[1;31mERROR\033[0m: Attempt to write on input device pin: " << m_pin << std::endl;
         exit(EXIT_FAILURE);
     }
     if (t_new_state != HIGH && t_new_state != LOW) {
-        std::cerr << "Attempt to set an invalid state (" << t_new_state << ") on device pin=" << m_pin << std::endl;
+        std::cerr << "\033[103m\033[1;31mERROR\033[0m: Attempt to set an invalid state (" << t_new_state << ") on device pin=" << m_pin << std::endl;
         exit(EXIT_FAILURE);
     }
     digitalWrite(m_pin, t_new_state);
@@ -43,26 +39,25 @@ void Device::set_state(int t_new_state)
     #endif
 }
 
-int Device::get_state()
+int Device::get_last_state() noexcept
 {
-    #ifndef _DEVELOPMENT_MODE_
-    if (m_mode == INPUT)
-        m_last_state = digitalRead(m_pin);
-    #else
+    #ifdef _DEVELOPMENT_MODE_
     m_last_state = rand() % 2;
     #endif
     return m_last_state;
 }
 
+int Device::refresh_time_delta() const noexcept
+{
+    return m_refresh_time_delta;
+}
+
 void Device::toggle_state()
 {
-    int last_state = get_state();
     #ifndef _DEVELOPMENT_MODE_
-    if (last_state == HIGH) {
+    if (get_last_state() == HIGH)
         set_state(LOW);
-    }
-    else {
+    else
         set_state(HIGH);
-    }
     #endif
 }

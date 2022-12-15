@@ -2,6 +2,8 @@
 #define _DHTT22_HPP_
 
 #include "Environment.hpp"
+#include "Device.hpp"
+
 #ifndef _DEVELOPMENT_MODE_
     #include <wiringPi.h>
 #endif

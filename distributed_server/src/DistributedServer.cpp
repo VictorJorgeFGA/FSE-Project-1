@@ -3,11 +3,12 @@
 #include <iostream>
 #include <cstdlib>
 #include <signal.h>
+#include <sys/time.h>
 
 DistributedServer * DistributedServer::_distributed_server = nullptr;
 bool DistributedServer::_server_is_running = false;
 
-void DistributedServer::start_up(std::string & t_main_server_address, int t_main_server_port)
+void DistributedServer::start_up(std::string t_main_server_address, int t_main_server_port)
 {
     if (_distributed_server != nullptr) {
         std::cerr << "Attempt to initialize the distributed server twice" << std::endl;
@@ -43,21 +44,41 @@ void DistributedServer::handle_terminator_signals(int signum)
     _server_is_running = false;
 }
 
+void DistributedServer::read_devices(int signum)
+{
+    signal(SIGALRM, )
+}
+
 void DistributedServer::run()
 {
     _server_is_running = true;
+
+    m_last_frame.
+    gettimeofday(&m_last_frame, nullptr);
+    signal(SIGALRM, read_devices);
+    ualarm(50000, 0);
     while (_server_is_running) {
+        pause();
         push_devices_information();
-        sleep(1);
     }
 }
 
-void DistributedServer::add_toggleable_device(std::string && t_device_name, Device * t_device)
+void DistributedServer::add_w_device(std::string t_device_name, Device * t_device)
 {
-    if (m_toggleable_devices.count(t_device_name) > 0) {
-        std::cerr << "\033[0;33mWARNING:\033[0m Attempt to add duplicated device: " << t_device_name << std::endl;
+    if (m_w_devices.count(t_device_name) > 0) {
+        std::cerr << "\033[0;31mERROR:\033[0m Attempt to add duplicated write device: " << t_device_name << std::endl;
+        exit(EXIT_FAILURE);
     }
-    m_toggleable_devices[t_device_name] = t_device;
+    m_w_devices[t_device_name] = t_device;
+}
+
+void DistributedServer::add_r_device(std::string t_device_name, Device * t_device)
+{
+    if (m_r_devices.count(t_device_name) > 0) {
+        std::cerr << "\033[0;31mERROR:\033[0m Attempt to add duplicated read device: " << t_device_name << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    m_r_devices[t_device_name] = t_device;
 }
 
 DistributedServer::DistributedServer(std::string & t_main_server_address, int t_main_server_port):
@@ -95,12 +116,12 @@ DistributedServer::~DistributedServer()
 
 void DistributedServer::push_devices_information()
 {
-    if (!m_toggleable_devices.empty()) {
-        std::string information = "";
-        bool need_comma = false;
-        for (auto device : m_toggleable_devices)
-            information += device.first + " " + std::to_string(device.second->get_state()) + "\n";
-        std::cout << information << std::endl;
+    std::string information = "";
+    for (auto device : m_w_devices)
+        information += device.first + " " + std::to_string(device.second->get_state()) + "\n";
+    for (auto device : m_r_devices)
+        information += device.first + " " + std::to_string(device.second->get_state()) + "\n";
+
+    if (!information.empty())
         send(m_communication_socket_file_descriptor, information.c_str(), information.size(), 0);
-    }
 }

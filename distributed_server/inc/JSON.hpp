@@ -13,7 +13,8 @@ public:
     JSON(const char *);
     ~JSON();
 
-    int get_number_from_key(const std::string &);
+    int get_number_from_key(const std::string);
+    std::string get_string_from_key(const std::string);
 
     std::string to_string() const;
 };

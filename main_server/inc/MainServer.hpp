@@ -49,7 +49,6 @@ private:
     bool m_security_system;
     std::string m_ui_alert_message;
 
-
 protected:
 };
 
