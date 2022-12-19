@@ -28,6 +28,10 @@ ConfigurationHandler::ConfigurationHandler()
     m_main_server_port = config_json->get_number_from_key("main_server_port");
     m_main_server_address = config_json->get_string_from_key("main_server_address");
 
+    #ifndef _DEVELOPMENT_MODE_
+    initialize_sensors();
+    #endif
+
     delete config_json;
 }
 

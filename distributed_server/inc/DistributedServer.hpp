@@ -29,8 +29,10 @@ public:
     static void read_devices(int signum);
 
     void run();
-    void add_r_device(std::string t_device_name, Device * t_device);
     void add_w_device(std::string t_device_name, Device * t_device);
+    void add_r_device(std::string t_device_name, Device * t_device);
+    void increment_cycle();
+    int cycles() const noexcept;
 
 private:
     DistributedServer();
@@ -38,7 +40,8 @@ private:
     DistributedServer(std::string & t_main_server_address, int t_main_server_port);
     ~DistributedServer();
 
-    void push_devices_information();
+    void push_devices_information(bool only_recently_updated = true);
+    void handle_main_server_commands();
 
     static DistributedServer * _distributed_server;
     static bool _server_is_running;
@@ -51,7 +54,11 @@ private:
     std::map<std::string, Device*> m_w_devices;
     std::map<std::string, Device*> m_r_devices;
 
-    struct timeval m_last_frame;
+    int m_previous_people_count;
+    int m_people_count;
+
+    int m_cycles;
+    char m_data[1000];
 
 protected:
 };

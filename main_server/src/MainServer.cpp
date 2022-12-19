@@ -18,19 +18,14 @@ std::vector<std::string> MainServer::_toggleable_devices = {
     "lamp02",
     "air_conditioner",
     "projector",
-    "smoke_sensor",
-    "presence_sensor",
-    "window01",
-    "window02"
+    "buzzer_alarm",
 };
 
 void MainServer::handle_terminator_signal(int t_signal_num)
 {
     std::cout << std::endl << "Gracefully stopping..." << std::endl;
-    if (_main_server != nullptr) {
-        _main_server->shut_down();
-    }
-    exit(EXIT_SUCCESS);
+    if (_main_server != nullptr)
+        _main_server->m_server_is_running = false;
 }
 
 void MainServer::start_up(int t_port)
@@ -88,15 +83,18 @@ void MainServer::run()
                     disconnected_distributed_servers.push_back(i);
             }
         } // Check for pushed messages from distributed servers
+
         for (auto i : disconnected_distributed_servers) {
             FD_CLR(m_distributed_servers[i].communication_socket_fd, &m_file_descriptors_set);
             m_distributed_servers.erase(m_distributed_servers.begin() + i);
         }
+
+        check_security_system();
     }
 }
 
 MainServer::MainServer(int t_port):
-m_port(t_port)
+m_port(t_port), m_security_system_triggered(false)
 {
     std::cout << std::endl << "Initializing the main server..." << std::endl;
     // Initializing Listening Socket
@@ -143,9 +141,11 @@ void MainServer::handle_user_input()
 {
     m_ui_alert_message = "";
     std::string m_command_buffer;
-    std::cin >> m_command_buffer;
+    std::getline(std::cin, m_command_buffer);
     std::vector<std::string> split_cmd;
     std::stringstream stream_data(m_command_buffer);
+
+    std::cout << m_command_buffer << std::endl;
 
     std::string tmp_str;
     while (std::getline(stream_data, tmp_str, ' '))
@@ -158,7 +158,18 @@ void MainServer::handle_user_input()
     else if(m_command_buffer == "refresh" || m_command_buffer == "r") {}
     else if ((int) split_cmd.size() == 3) {
         if (is_a_toggleable_device(split_cmd[1])) {
-            m_ui_alert_message = "Ok";
+            if (!str_is_number(split_cmd[2])) {
+                m_ui_alert_message = "\033[0;31mERROR\033[0m " + split_cmd[2] + " is not a room number";
+            }
+            else {
+                int room_number = std::stoi(split_cmd[2]);
+                if ((int)m_distributed_servers.size() <= room_number || 0 > room_number) {
+                    m_ui_alert_message = "\033[0;31mERROR\033[0m " + split_cmd[2] + " is not a valid room number";
+                }
+                else {
+                    send_message_to_distributed_server(m_distributed_servers[room_number], "toggle " + split_cmd[1]);
+                }
+            }
         } else {
             m_ui_alert_message = "\033[0;31mERROR\033[0m: " + split_cmd[1] + " is not a toggleable device";
         }
@@ -172,18 +183,18 @@ void MainServer::handle_user_input()
 void MainServer::display_current_states()
 {
     system("clear");
-    std::cout << " _______________________________________________________________________________________________________________________" << std::endl;
-    printf("[     MAIN SERVER  | PID: %6d |  Running on Port: %6d                                                             ]\n", getpid(), m_port);
-    std::cout << " ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" << std::endl;
-    std::cout << " ________________                                                 ________________" << std::endl;
-    std::cout << "| Rooms' devices |                                               | Room's sensors |" << std::endl;
-    std::cout << "|________________|_______________________________________________|________________|_____________________________________" << std::endl;
-    std::cout << "|        | lamp01 | lamp02 | air_conditioner | projector | alarm | smoke_sensor | presence_sensor | window01 | window02 |" << std::endl;
-    std::cout << "|¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨|" << std::endl;
+    std::cout << " ______________________________________________________________________________________________________________________________" << std::endl;
+    printf("[     MAIN SERVER  | PID: %6d |  Running on Port: %6d                                                                    ]\n", getpid(), m_port);
+    std::cout << " ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" << std::endl;
+    std::cout << " ________________                                                        ________________" << std::endl;
+    std::cout << "| Rooms' devices |                                                      | Room's sensors |" << std::endl;
+    std::cout << "|________________|______________________________________________________|________________|_____________________________________" << std::endl;
+    std::cout << "|        | lamp01 | lamp02 | air_conditioner | projector | buzzer_alarm | smoke_sensor | presence_sensor | window01 | window02 |" << std::endl;
+    std::cout << "|¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨|¨¨¨¨¨¨¨¨¨¨|" << std::endl;
     for (int i = 0; i < (int) m_distributed_servers.size(); i++) {
         auto ds = m_distributed_servers[i];
         printf(
-            "| room %d |   %s  |   %s  |       %s       |    %s    |  %s  |      %s     |       %s       |    %s   |   %s    |\n",
+            "| room %d |   %s  |   %s  |       %s       |    %s    |      %s     |      %s     |       %s       |    %s   |   %s    |\n",
             i,
             bool_to_on_off(ds.lamp_1).c_str(),
             bool_to_on_off(ds.lamp_2).c_str(),
@@ -196,7 +207,7 @@ void MainServer::display_current_states()
             bool_to_on_off(ds.window_sensor_2).c_str()
         );
     }
-    std::cout << " ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨  " << std::endl;
+    std::cout << " ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨ " << std::endl;
     std::cout << " _________________" << std::endl;
     std::cout << "| Rooms' statuses |" << std::endl;
     std::cout << "|_________________|______________________________" << std::endl;
@@ -206,7 +217,7 @@ void MainServer::display_current_states()
     for (int i = 0; i < (int) m_distributed_servers.size(); i++) {
         auto ds = m_distributed_servers[i];
         printf(
-            "| room %d |      %d      |   %5.1f ºC  |  %2.1f    |\n",
+            "| room %d |      %2d      |   %5.1f ºC  |  %4.1f    |\n",
             i,
             ds.people_amount,
             ds.temperature,
@@ -222,9 +233,9 @@ void MainServer::display_current_states()
     printf("| Total people count | %3d |\n", people_count);
     printf("| Security System    | %s |\n", bool_to_on_off(m_security_system).c_str());
     printf(" ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨\n");
-    std::cout << " _______________________________________________________________________________________________________________________" << std::endl;
+    std::cout << " ______________________________________________________________________________________________________________________________" << std::endl;
     printf("[ %s\n", m_ui_alert_message.c_str());
-    std::cout << " ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" << std::endl;
+    std::cout << " ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" << std::endl;
 
 
     std::cout << "\tCommands:" << std::endl;
@@ -238,11 +249,6 @@ void MainServer::display_current_states()
 std::string MainServer::bool_to_on_off(bool val)
 {
     return val ? "\033[0;32mON\033[0m " : "\033[0;33mOFF\033[0m";
-}
-
-bool MainServer::is_a_toggleable_device(std::string & device)
-{
-    return std::find(_toggleable_devices.begin(), _toggleable_devices.end(), device) != _toggleable_devices.end();
 }
 
 void MainServer::accept_new_connection()
@@ -268,9 +274,9 @@ bool MainServer::receive_message_from_distributed_server(DistributedServer & dis
             buffer_stream >> distributed_server.temperature;
         else if (tmp_str == "humidity")
             buffer_stream >> distributed_server.humidity;
-        else if (tmp_str == "lamp_1")
+        else if (tmp_str == "lamp01")
             buffer_stream >> distributed_server.lamp_1;
-        else if (tmp_str == "lamp_2")
+        else if (tmp_str == "lamp02")
             buffer_stream >> distributed_server.lamp_2;
         else if (tmp_str == "air_conditioner")
             buffer_stream >> distributed_server.air_conditioner;
@@ -286,16 +292,50 @@ bool MainServer::receive_message_from_distributed_server(DistributedServer & dis
             buffer_stream >> distributed_server.window_sensor_1;
         else if (tmp_str == "window_sensor_2")
             buffer_stream >> distributed_server.window_sensor_2;
-        else if (tmp_str == "gate_in_sensor") {
-            int people_in;
-            buffer_stream >> people_in;
-            distributed_server.people_amount += people_in;
-        }
-        else if (tmp_str == "gate_out_sensor") {
-            int people_out;
-            buffer_stream >> people_out;
-            distributed_server.people_amount -= people_out;
-        }
+        else if (tmp_str == "people_amount")
+            buffer_stream >> distributed_server.people_amount;
     }
     return true;
+}
+
+void MainServer::send_message_to_distributed_server(DistributedServer & distributed_server, std::string msg)
+{
+    if (send(distributed_server.communication_socket_fd, msg.c_str(), msg.size(), 0) <= 0)
+        m_ui_alert_message = "\033[0;31ERROR:\033[0m it was not possible to complete your command";
+    else {
+        m_ui_alert_message = "\033[0;32mDone\033[0m";
+    }
+}
+
+void MainServer::check_security_system()
+{
+    if (m_security_system_triggered)
+        return; // Security systems is already triggered, prevent to push redundant alarm activation messages to servers
+
+    for (auto distributed_server : m_distributed_servers) {
+        if (distributed_server.smoke_sensor || (m_security_system && would_trigger_security_system(distributed_server))) {
+            m_security_system_triggered = true;
+            break;
+        }
+    }
+    for (auto distributed_server : m_distributed_servers) {
+        if (m_security_system_triggered)
+            send_message_to_distributed_server(distributed_server, "buzzer_alarm 1");
+    }
+}
+
+bool MainServer::would_trigger_security_system(DistributedServer & distributed_server)
+{
+    return (distributed_server.presence_sensor || distributed_server.window_sensor_1 || distributed_server.window_sensor_2);
+}
+
+bool MainServer::is_a_toggleable_device(std::string & device)
+{
+    return std::find(_toggleable_devices.begin(), _toggleable_devices.end(), device) != _toggleable_devices.end();
+}
+
+bool MainServer::str_is_number(const std::string & s)
+{
+    return !s.empty() && std::find_if(s.begin(),
+        s.end(), [](unsigned char c) { return !std::isdigit(c); }) == s.end();
 }

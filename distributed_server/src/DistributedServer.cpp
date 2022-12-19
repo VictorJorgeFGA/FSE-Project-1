@@ -1,9 +1,13 @@
 #include "DistributedServer.hpp"
+#include "Environment.hpp"
 
 #include <iostream>
 #include <cstdlib>
 #include <signal.h>
 #include <sys/time.h>
+#include <fcntl.h>
+#include <sstream>
+#include <vector>
 
 DistributedServer * DistributedServer::_distributed_server = nullptr;
 bool DistributedServer::_server_is_running = false;
@@ -46,20 +50,44 @@ void DistributedServer::handle_terminator_signals(int signum)
 
 void DistributedServer::read_devices(int signum)
 {
-    signal(SIGALRM, )
+    signal(SIGALRM, read_devices);
+    auto server = DistributedServer::server();
+    server->increment_cycle();
+    for (auto r_device : server->m_r_devices)
+        r_device.second->refresh_state(server->cycles());
+
+    for (auto w_device : server->m_w_devices)
+        w_device.second->refresh_state(server->cycles());
+
+    auto m_people_count_in = server->m_r_devices["gate_in_sensor"];
+    auto m_people_count_out = server->m_r_devices["gate_out_sensor"];
+
+    server->m_previous_people_count = server->m_people_count;
+    server->m_people_count += m_people_count_in->state_changed_this_cycle() && m_people_count_in->get_current_state() ? 1 : 0;
+    server->m_people_count -= m_people_count_out->state_changed_this_cycle() && m_people_count_out->get_current_state() ? 1 : 0;
 }
 
 void DistributedServer::run()
 {
     _server_is_running = true;
-
-    m_last_frame.
-    gettimeofday(&m_last_frame, nullptr);
     signal(SIGALRM, read_devices);
-    ualarm(50000, 0);
+    push_devices_information(false);
     while (_server_is_running) {
+        ualarm(50000, 0); // TODO remove hardcoded cycle
         pause();
         push_devices_information();
+        handle_main_server_commands();
+        #ifdef _NO_SOCKET_
+        if (cycles() % 20 == 0) {
+            system("clear");
+            for (auto d : m_r_devices) {
+                std::cout << d.first << " " << d.second->get_current_state() << std::endl;
+            }
+            for (auto d: m_w_devices) {
+                std::cout << d.first << " " << d.second->get_current_state() << std::endl;
+            }
+        }
+        #endif
     }
 }
 
@@ -81,9 +109,20 @@ void DistributedServer::add_r_device(std::string t_device_name, Device * t_devic
     m_r_devices[t_device_name] = t_device;
 }
 
-DistributedServer::DistributedServer(std::string & t_main_server_address, int t_main_server_port):
-m_main_server_ip_address(t_main_server_address), m_main_server_port(t_main_server_port)
+void DistributedServer::increment_cycle()
 {
+    m_cycles = m_cycles % 2000000 + 1;
+}
+
+int DistributedServer::cycles() const noexcept
+{
+    return m_cycles;
+}
+
+DistributedServer::DistributedServer(std::string & t_main_server_address, int t_main_server_port):
+m_main_server_ip_address(t_main_server_address), m_main_server_port(t_main_server_port), m_people_count(0), m_previous_people_count(0)
+{
+    #ifndef _NO_SOCKET_
     m_communication_socket_file_descriptor = socket(AF_INET, SOCK_STREAM, 0);
     if (m_communication_socket_file_descriptor == 0) {
         std::cerr << "Unable to create the communication socket file descriptor: " << strerror(errno) << std::endl;
@@ -103,25 +142,81 @@ m_main_server_ip_address(t_main_server_address), m_main_server_port(t_main_serve
         std::cerr << "Unable to connect to server " << m_main_server_ip_address << ":" << m_main_server_port << ". Error: " << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
+    if (fcntl(m_communication_socket_file_descriptor, F_SETFL, fcntl(m_communication_socket_file_descriptor, F_GETFL, 0) | O_NONBLOCK) == -1) {
+        std::cerr << "\033[1;31mERROR:\033[0m Unable to set socket to non-blocking mode" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    #endif
 
     signal(SIGINT, handle_terminator_signals);
     signal(SIGTERM, handle_terminator_signals);
     signal(SIGABRT, handle_terminator_signals);
+
+    std::cout << "Distributed Server started successfully!" << std::endl;
 }
 
 DistributedServer::~DistributedServer()
 {
+    #ifndef _NO_SOCKET_
     close(m_communication_socket_file_descriptor);
+    #endif
 }
 
-void DistributedServer::push_devices_information()
+void DistributedServer::push_devices_information(bool only_recently_updated)
 {
     std::string information = "";
-    for (auto device : m_w_devices)
-        information += device.first + " " + std::to_string(device.second->get_state()) + "\n";
-    for (auto device : m_r_devices)
-        information += device.first + " " + std::to_string(device.second->get_state()) + "\n";
+    for (auto device : m_w_devices) {
+        if (!only_recently_updated || device.second->state_changed_this_cycle())
+            information += device.first + " " + std::to_string(device.second->get_current_state()) + "\n";
+    }
+    for (auto device : m_r_devices) {
+        if (!only_recently_updated || (device.second->state_changed_this_cycle() && device.first != "gate_in_sensor" && device.first != "gate_out_sensor"))
+            information += device.first + " " + std::to_string(device.second->get_current_state()) + "\n";
+    }
 
+    if (!only_recently_updated || m_previous_people_count != m_people_count)
+        information += "people_amount " + std::to_string(m_people_count) + "\n";
+
+    #ifndef _NO_SOCKET_
     if (!information.empty())
         send(m_communication_socket_file_descriptor, information.c_str(), information.size(), 0);
+    #endif
+}
+
+void DistributedServer::handle_main_server_commands()
+{
+    memset(m_data, '\0', sizeof(m_data));
+    int bytes_read = recv(m_communication_socket_file_descriptor, m_data, sizeof(m_data), 0);
+    if (bytes_read == -1)
+        return;
+    std::string cmd(m_data);
+    std::cout << "Handling command: " << cmd << std::endl;
+
+    std::vector<std::string> split_cmd;
+    std::stringstream stream_data(m_data);
+
+    std::string tmp_str;
+    while (std::getline(stream_data, tmp_str, ' '))
+        split_cmd.push_back(tmp_str);
+    if (split_cmd[0] == "toggle") {
+        if (m_w_devices.count(split_cmd[1]) < 1) {
+            std::cerr << "\033[0;31mERROR:\033[0m Unknow writable device " << split_cmd[1] << std::endl;
+            return;
+        }
+        m_w_devices[split_cmd[1]]->toggle_state();
+    }
+    else {
+        if (m_w_devices.count(split_cmd[0]) < 1) {
+            std::cerr << "\033[0;31mERROR:\033[0m Unknow writable device " << split_cmd[0] << std::endl;
+            return;
+        }
+        #ifndef _DEVELOPMENT_MODE_
+        m_w_devices[split_cmd[0]]->set_state(split_cmd[1] == "1" ? HIGH : LOW );
+        #else
+        m_w_devices[split_cmd[0]]->set_state(split_cmd[1] == "1" ? 1 : 0 );
+        #endif
+        std::cout << "new state: " <<  m_w_devices[split_cmd[0]]->get_current_state() << std::endl;
+    }
+    push_devices_information(false);
+    std::cout << "\033[0;32mSUCCESS\033[0m" << std::endl;
 }

@@ -6,8 +6,8 @@
 #include <wiringPi.h>
 #endif
 
-Device::Device(int t_pin, int t_mode, int t_refresh_time_delta):
-m_pin(t_pin), m_mode(t_mode), m_last_state(0), m_refresh_time_delta(t_refresh_time_delta)
+Device::Device(int t_pin, int t_mode, int t_cycles_to_read):
+m_pin(t_pin), m_mode(t_mode), m_current_state(0), m_previous_state(0), m_cycles_to_read(t_cycles_to_read)
 {
     #ifndef _DEVELOPMENT_MODE_
     pinMode(m_pin, m_mode);
@@ -33,31 +33,51 @@ void Device::set_state(int t_new_state)
         exit(EXIT_FAILURE);
     }
     digitalWrite(m_pin, t_new_state);
-    m_last_state = t_new_state;
+    m_previous_state = m_current_state;
+    m_current_state = t_new_state;
     #else
-    m_last_state = t_new_state;
+    m_previous_state = m_current_state;
+    m_current_state = t_new_state;
     #endif
 }
 
-int Device::get_last_state() noexcept
+void Device::refresh_state(int t_elapsed_cycles)
 {
-    #ifdef _DEVELOPMENT_MODE_
-    m_last_state = rand() % 2;
+    m_previous_state = m_current_state;
+    #ifndef _DEVELOPMENT_MODE_
+    if (m_mode != INPUT)
+        return;
+    if (t_elapsed_cycles % cycles_to_read() == 0)
+        m_current_state = digitalRead(m_pin);
     #endif
-    return m_last_state;
 }
 
-int Device::refresh_time_delta() const noexcept
+bool Device::state_changed_this_cycle()
 {
-    return m_refresh_time_delta;
+    return m_current_state != m_previous_state;
+}
+
+int Device::get_current_state() noexcept
+{
+    return m_current_state;
+}
+
+int Device::cycles_to_read() const noexcept
+{
+    return m_cycles_to_read;
 }
 
 void Device::toggle_state()
 {
     #ifndef _DEVELOPMENT_MODE_
-    if (get_last_state() == HIGH)
+    if (get_current_state() == HIGH)
         set_state(LOW);
     else
         set_state(HIGH);
+    #else
+    if (get_current_state() == 1)
+        set_state(0);
+    else
+        set_state(1);
     #endif
 }

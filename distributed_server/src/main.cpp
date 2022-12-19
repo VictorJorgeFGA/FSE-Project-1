@@ -22,18 +22,18 @@ int main(int argc, char * argv[]) {
     Device pr(config.wiringPi_pin_for("PR"), OUTPUT);
     Device buzzer(config.wiringPi_pin_for("AL_BZ"), OUTPUT);
 
-    Device s_pres(config.wiringPi_pin_for("SPres"), INPUT);
-    Device s_fum(config.wiringPi_pin_for("SFum"), INPUT);
-    Device s_jan(config.wiringPi_pin_for("SJan"), INPUT);
-    Device s_por(config.wiringPi_pin_for("SPor"), INPUT);
-    Device sc_in(config.wiringPi_pin_for("SC_IN"), INPUT);
-    Device sc_out(config.wiringPi_pin_for("SC_OUT"), INPUT);
+    Device s_pres(config.wiringPi_pin_for("SPres"), INPUT, 10);
+    Device s_fum(config.wiringPi_pin_for("SFum"), INPUT, 10);
+    Device s_jan(config.wiringPi_pin_for("SJan"), INPUT, 10);
+    Device s_por(config.wiringPi_pin_for("SPor"), INPUT, 10);
+    Device sc_in(config.wiringPi_pin_for("SC_IN"), INPUT, 1);
+    Device sc_out(config.wiringPi_pin_for("SC_OUT"), INPUT, 1);
 
     DistributedServer::start_up(config.main_server_address(), config.main_server_port());
     DistributedServer * server = DistributedServer::server();
 
-    server->add_w_device("lamp_1", &lamp_01);
-    server->add_w_device("lamp_2", &lamp_02);
+    server->add_w_device("lamp01", &lamp_01);
+    server->add_w_device("lamp02", &lamp_02);
     server->add_w_device("air_conditioner", &ac);
     server->add_w_device("projector", &pr);
     server->add_w_device("buzzer_alarm", &buzzer);

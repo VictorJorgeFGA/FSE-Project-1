@@ -32,8 +32,13 @@ private:
     std::string bool_to_on_off(bool);
     void accept_new_connection();
     bool receive_message_from_distributed_server(DistributedServer &);
+    void send_message_to_distributed_server(DistributedServer &, std::string msg);
+    void check_security_system();
+
+    inline bool would_trigger_security_system(DistributedServer &);
 
     static bool is_a_toggleable_device(std::string &);
+    static bool str_is_number(const std::string &);
 
     static MainServer * _main_server;
     static const int stdin = 0;
@@ -48,6 +53,7 @@ private:
     std::vector<DistributedServer> m_distributed_servers;
     bool m_security_system;
     std::string m_ui_alert_message;
+    bool m_security_system_triggered;
 
 protected:
 };

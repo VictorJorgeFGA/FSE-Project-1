@@ -19,7 +19,7 @@ struct DistributedServer
     bool window_sensor_1 = false;
     bool window_sensor_2 = false;
     int people_amount = 0;
-    std::string name;
+    std::string address;
     struct sockaddr_in distributed_server_address;
 };
 
