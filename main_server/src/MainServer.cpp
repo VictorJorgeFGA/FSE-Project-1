@@ -7,6 +7,9 @@
 #include <cstdio>
 #include <sstream>
 #include <algorithm>
+#include <chrono>
+#include <ctime>
+#include <fstream>
 
 #include "MainServer.hpp"
 
@@ -52,6 +55,12 @@ void MainServer::shut_down()
         std::cerr << "Attempt to shut down the main server with no previous initialization" << std::endl;
         exit(EXIT_FAILURE);
     }
+
+    std::ofstream log_file;
+    log_file.open("log.csv", std::ios::app);
+    log_file << _main_server->m_log;
+    log_file.close();
+
     delete _main_server;
     _main_server = nullptr;
 }
@@ -152,32 +161,62 @@ void MainServer::handle_user_input()
         split_cmd.push_back(tmp_str);
 
     if (m_command_buffer == "toggle securitysystem") {
-        m_security_system = !m_security_system;
-        m_ui_alert_message = "Security System is now " + bool_to_on_off(m_security_system);
-    }
-    else if(m_command_buffer == "refresh" || m_command_buffer == "r") {}
-    else if ((int) split_cmd.size() == 3) {
-        if (is_a_toggleable_device(split_cmd[1])) {
-            if (!str_is_number(split_cmd[2])) {
-                m_ui_alert_message = "\033[0;31mERROR\033[0m " + split_cmd[2] + " is not a room number";
+        if (m_security_system) {// security system currently activated
+            m_security_system = false;
+            m_ui_alert_message = "\033[0;32mSUCCESS:\033[0m Security system is now " + bool_to_on_off(m_security_system);
+        }
+        else {
+            bool can_activate_ss = true;
+            for (auto distributed_server : m_distributed_servers) {
+                can_activate_ss = can_activate_ss && !would_trigger_security_system(distributed_server);
+            }
+            if (can_activate_ss) {
+                m_security_system = true;
+                m_ui_alert_message = "\033[0;32mSUCCESS:\033[0m Security system is now " + bool_to_on_off(m_security_system);
             }
             else {
-                int room_number = std::stoi(split_cmd[2]);
-                if ((int)m_distributed_servers.size() <= room_number || 0 > room_number) {
-                    m_ui_alert_message = "\033[0;31mERROR\033[0m " + split_cmd[2] + " is not a valid room number";
-                }
-                else {
-                    send_message_to_distributed_server(m_distributed_servers[room_number], "toggle " + split_cmd[1]);
+                m_ui_alert_message = "\033[0;31mERROR:\033[0m It was not possible to activate the security system. It may have presence in some room or open windows/doors";
+            }
+        }
+    }
+    else if(m_command_buffer == "refresh" || m_command_buffer == "r") {
+
+    }
+    else if ((int) split_cmd.size() == 3 && (split_cmd[0] == "turnin" || split_cmd[0] == "turnoff")) {
+        if (is_a_toggleable_device(split_cmd[1])) {
+            bool turn_in = (split_cmd[0] == "turnin");
+            if (split_cmd[2] == "all") {
+                for (auto distributed_server : m_distributed_servers) {
+                    send_message_to_distributed_server(distributed_server, split_cmd[1] + (turn_in ? " 1" : " 0"));
                 }
             }
-        } else {
-            m_ui_alert_message = "\033[0;31mERROR\033[0m: " + split_cmd[1] + " is not a toggleable device";
+            else if (str_is_number(split_cmd[2])) {
+                int room_number = std::stoi(split_cmd[2]);
+                if ((int) m_distributed_servers.size() > room_number || 0 <= room_number) {
+                    send_message_to_distributed_server(m_distributed_servers[room_number], split_cmd[1] + (turn_in ? " 1" : " 0"));
+                }
+                else {
+                    m_ui_alert_message = "\033[0;31mERROR\033[0m " + split_cmd[2] + " is not a valid room number";
+                }
+            }
+            else {
+                m_ui_alert_message = "\033[0;31mERROR:\033[0m " + split_cmd[2] + " is not a valid room specification";
+            }
+        }
+        else {
+            m_ui_alert_message = "\033[0;31mERROR\033[0m " + split_cmd[2] + " is not a toggleable device";
         }
     }
     else {
         m_ui_alert_message = "\033[0;31mERROR\033[0m: Unknown command '" + m_command_buffer + "'";
     }
     display_current_states();
+
+    auto current_time = std::chrono::system_clock::now();
+    auto current_time_t = std::chrono::system_clock::to_time_t(current_time);
+    std::string str_current_time(std::ctime(&current_time_t));
+    str_current_time.pop_back(); // removing default \n
+    m_log += str_current_time + "," + m_command_buffer + "\n";
 }
 
 void MainServer::display_current_states()
@@ -237,10 +276,9 @@ void MainServer::display_current_states()
     printf("[ %s\n", m_ui_alert_message.c_str());
     std::cout << " ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" << std::endl;
 
-
     std::cout << "\tCommands:" << std::endl;
-    std::cout << "\t\ttoggle <device> <room>            | <device> The available devices is presented on the Room's devices" << std::endl;
-    std::cout << "\t\t                                  | table above. <room> the room number. Example: toggle lamp01 0." << std::endl << std::endl;
+    std::cout << "\t\tturnin|turoff <device> <room>|all | <device> The available devices is presented on the Room's devices" << std::endl;
+    std::cout << "\t\t                                  | table above. <room> the room number or all. Example: turnin lamp01 0." << std::endl << std::endl;
     std::cout << "\t\ttoggle securitysystem             | Enable the security system if it's currently disabled and vice versa." << std::endl << std::endl;
     std::cout << "\t\trefresh                           | Or simply 'r', refreshes the devices information on screen." << std::endl << std::endl;
     printf("Enter your command:\n");

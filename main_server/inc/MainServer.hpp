@@ -54,6 +54,7 @@ private:
     bool m_security_system;
     std::string m_ui_alert_message;
     bool m_security_system_triggered;
+    std::string m_log;
 
 protected:
 };
