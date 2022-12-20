@@ -262,6 +262,7 @@ void MainServer::accept_new_connection()
 
 bool MainServer::receive_message_from_distributed_server(DistributedServer & distributed_server)
 {
+    memset(_buffer, '\0', sizeof(_buffer));
     int data_amout = recv(distributed_server.communication_socket_fd, _buffer, sizeof(_buffer), 0);
     if (data_amout == 0)
         return false;
@@ -294,6 +295,14 @@ bool MainServer::receive_message_from_distributed_server(DistributedServer & dis
             buffer_stream >> distributed_server.window_sensor_2;
         else if (tmp_str == "people_amount")
             buffer_stream >> distributed_server.people_amount;
+        else if (tmp_str == "temp") {
+            buffer_stream >> distributed_server.temperature;
+            distributed_server.temperature /= 10.0f;
+        }
+        else if (tmp_str == "hum") {
+            buffer_stream >> distributed_server.humidity;
+            distributed_server.humidity /= 10.0f;
+        }
     }
     return true;
 }

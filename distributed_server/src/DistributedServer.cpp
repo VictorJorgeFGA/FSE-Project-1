@@ -9,6 +9,10 @@
 #include <sstream>
 #include <vector>
 
+#ifndef _DEVELOPMENT_MODE_
+    #include <wiringPi.h>
+#endif
+
 DistributedServer * DistributedServer::_distributed_server = nullptr;
 bool DistributedServer::_server_is_running = false;
 
@@ -63,15 +67,25 @@ void DistributedServer::read_devices(int signum)
     auto m_people_count_out = server->m_r_devices["gate_out_sensor"];
 
     server->m_previous_people_count = server->m_people_count;
-    server->m_people_count += m_people_count_in->state_changed_this_cycle() && m_people_count_in->get_current_state() ? 1 : 0;
-    server->m_people_count -= m_people_count_out->state_changed_this_cycle() && m_people_count_out->get_current_state() ? 1 : 0;
+    if (m_people_count_in->previous_and_current_state_differ()) {
+        server->m_people_count += m_people_count_in->get_current_state() ? 1 : 0;
+        m_people_count_in->sync_previous_and_current_states();
+    }
+
+    if (m_people_count_out->previous_and_current_state_differ()) {
+        server->m_people_count -= m_people_count_out->get_current_state() ? 1 : 0;
+        m_people_count_out->sync_previous_and_current_states();
+    }
+
+    server->m_temp_hum_sensor->refresh_state(server->cycles());
 }
 
 void DistributedServer::run()
 {
+    push_devices_information(false);
+
     _server_is_running = true;
     signal(SIGALRM, read_devices);
-    push_devices_information(false);
     while (_server_is_running) {
         ualarm(50000, 0); // TODO remove hardcoded cycle
         pause();
@@ -107,6 +121,11 @@ void DistributedServer::add_r_device(std::string t_device_name, Device * t_devic
         exit(EXIT_FAILURE);
     }
     m_r_devices[t_device_name] = t_device;
+}
+
+void DistributedServer::set_temp_hum_sensor(DHT22 * t_temp_hum_sensor)
+{
+    m_temp_hum_sensor = t_temp_hum_sensor;
 }
 
 void DistributedServer::increment_cycle()
@@ -166,16 +185,26 @@ void DistributedServer::push_devices_information(bool only_recently_updated)
 {
     std::string information = "";
     for (auto device : m_w_devices) {
-        if (!only_recently_updated || device.second->state_changed_this_cycle())
+        if (!only_recently_updated || device.second->previous_and_current_state_differ()) {
             information += device.first + " " + std::to_string(device.second->get_current_state()) + "\n";
+            device.second->sync_previous_and_current_states();
+        }
     }
     for (auto device : m_r_devices) {
-        if (!only_recently_updated || (device.second->state_changed_this_cycle() && device.first != "gate_in_sensor" && device.first != "gate_out_sensor"))
+        if (!only_recently_updated || (device.second->previous_and_current_state_differ() && device.first != "gate_in_sensor" && device.first != "gate_out_sensor")) {
             information += device.first + " " + std::to_string(device.second->get_current_state()) + "\n";
+            device.second->sync_previous_and_current_states();
+        }
     }
 
     if (!only_recently_updated || m_previous_people_count != m_people_count)
         information += "people_amount " + std::to_string(m_people_count) + "\n";
+
+    if (!only_recently_updated || m_temp_hum_sensor->previous_and_current_state_differ()) {
+        information += "temp " + std::to_string(m_temp_hum_sensor->temperature()) + "\n";
+        information += "hum " + std::to_string(m_temp_hum_sensor->humidity()) + "\n";
+        m_temp_hum_sensor->sync_previous_and_current_states();
+    }
 
     #ifndef _NO_SOCKET_
     if (!information.empty())

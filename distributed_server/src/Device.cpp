@@ -43,23 +43,29 @@ void Device::set_state(int t_new_state)
 
 void Device::refresh_state(int t_elapsed_cycles)
 {
-    m_previous_state = m_current_state;
     #ifndef _DEVELOPMENT_MODE_
     if (m_mode != INPUT)
         return;
-    if (t_elapsed_cycles % cycles_to_read() == 0)
+    if (t_elapsed_cycles % cycles_to_read() == 0) {
         m_current_state = digitalRead(m_pin);
+        m_previous_state = m_current_state;
+    }
     #endif
-}
-
-bool Device::state_changed_this_cycle()
-{
-    return m_current_state != m_previous_state;
 }
 
 int Device::get_current_state() noexcept
 {
     return m_current_state;
+}
+
+bool Device::previous_and_current_state_differ() const noexcept
+{
+    return m_current_state != m_previous_state;
+}
+
+void Device::sync_previous_and_current_states() noexcept
+{
+    m_previous_state = m_current_state;
 }
 
 int Device::cycles_to_read() const noexcept

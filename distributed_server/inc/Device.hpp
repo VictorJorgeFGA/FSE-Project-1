@@ -11,13 +11,17 @@ public:
     void toggle_state();
 
     void refresh_state(int t_elapsed_cycles);
-    bool state_changed_this_cycle();
+
     int get_current_state() noexcept;
+    bool previous_and_current_state_differ() const noexcept;
+
+    void sync_previous_and_current_states() noexcept;
 
     int cycles_to_read() const noexcept;
 
 private:
     Device();
+    Device(Device&);
     int m_pin;
     int m_mode;
     int m_current_state;

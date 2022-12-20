@@ -17,6 +17,7 @@
 #include <sys/time.h>
 
 #include "Device.hpp"
+#include "DHT22.hpp"
 
 class DistributedServer
 {
@@ -31,6 +32,7 @@ public:
     void run();
     void add_w_device(std::string t_device_name, Device * t_device);
     void add_r_device(std::string t_device_name, Device * t_device);
+    void set_temp_hum_sensor(DHT22 *);
     void increment_cycle();
     int cycles() const noexcept;
 
@@ -53,6 +55,7 @@ private:
 
     std::map<std::string, Device*> m_w_devices;
     std::map<std::string, Device*> m_r_devices;
+    DHT22 * m_temp_hum_sensor;
 
     int m_previous_people_count;
     int m_people_count;

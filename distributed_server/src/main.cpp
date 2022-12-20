@@ -3,6 +3,7 @@
 #include "Device.hpp"
 #include "Environment.hpp"
 #include "DistributedServer.hpp"
+#include "DHT22.hpp"
 
 #ifndef _DEVELOPMENT_MODE_
     #include <wiringPi.h>
@@ -29,6 +30,8 @@ int main(int argc, char * argv[]) {
     Device sc_in(config.wiringPi_pin_for("SC_IN"), INPUT, 1);
     Device sc_out(config.wiringPi_pin_for("SC_OUT"), INPUT, 1);
 
+    DHT22 dht22(config.wiringPi_pin_for("DHT22"));
+
     DistributedServer::start_up(config.main_server_address(), config.main_server_port());
     DistributedServer * server = DistributedServer::server();
 
@@ -44,6 +47,8 @@ int main(int argc, char * argv[]) {
     server->add_r_device("window_sensor_2", &s_por);
     server->add_r_device("gate_in_sensor", &sc_in);
     server->add_r_device("gate_out_sensor", &sc_out);
+
+    server->set_temp_hum_sensor(&dht22);
 
     server->run();
 
