@@ -47,8 +47,8 @@ void Device::refresh_state(int t_elapsed_cycles)
     if (m_mode != INPUT)
         return;
     if (t_elapsed_cycles % cycles_to_read() == 0) {
-        m_current_state = digitalRead(m_pin);
         m_previous_state = m_current_state;
+        m_current_state = digitalRead(m_pin);
     }
     #endif
 }

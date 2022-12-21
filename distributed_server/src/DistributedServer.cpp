@@ -89,6 +89,10 @@ void DistributedServer::run()
     while (_server_is_running) {
         ualarm(50000, 0); // TODO remove hardcoded cycle
         pause();
+
+        if (!_server_is_running)
+            break;
+
         push_devices_information();
         handle_main_server_commands();
         #ifdef _NO_SOCKET_

@@ -23,8 +23,6 @@ DHT22::~DHT22()
 
 void DHT22::refresh_state(int t_elapsed_cycles)
 {
-	m_previous_temp_cels = m_temp_cels;
-	m_previous_humidity = m_humidity;
 	if (t_elapsed_cycles % m_cycles_to_read != 0)
 		return;
 

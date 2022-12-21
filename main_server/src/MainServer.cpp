@@ -151,10 +151,11 @@ void MainServer::handle_user_input()
     m_ui_alert_message = "";
     std::string m_command_buffer;
     std::getline(std::cin, m_command_buffer);
+
+    bool should_save_log = (m_command_buffer != "r" && m_command_buffer != "refresh");
+
     std::vector<std::string> split_cmd;
     std::stringstream stream_data(m_command_buffer);
-
-    std::cout << m_command_buffer << std::endl;
 
     std::string tmp_str;
     while (std::getline(stream_data, tmp_str, ' '))
@@ -212,11 +213,13 @@ void MainServer::handle_user_input()
     }
     display_current_states();
 
-    auto current_time = std::chrono::system_clock::now();
-    auto current_time_t = std::chrono::system_clock::to_time_t(current_time);
-    std::string str_current_time(std::ctime(&current_time_t));
-    str_current_time.pop_back(); // removing default \n
-    m_log += str_current_time + "," + m_command_buffer + "\n";
+    if (should_save_log) {
+        auto current_time = std::chrono::system_clock::now();
+        auto current_time_t = std::chrono::system_clock::to_time_t(current_time);
+        std::string str_current_time(std::ctime(&current_time_t));
+        str_current_time.pop_back(); // removing default \n
+        m_log += str_current_time + "," + m_command_buffer + "\n";
+    }
 }
 
 void MainServer::display_current_states()
@@ -356,9 +359,7 @@ void MainServer::send_message_to_distributed_server(DistributedServer & distribu
 
 void MainServer::check_security_system()
 {
-    if (m_security_system_triggered)
-        return; // Security systems is already triggered, prevent to push redundant alarm activation messages to servers
-
+    m_security_system_triggered = false;
     for (auto distributed_server : m_distributed_servers) {
         if (distributed_server.smoke_sensor || (m_security_system && would_trigger_security_system(distributed_server))) {
             m_security_system_triggered = true;
@@ -366,7 +367,7 @@ void MainServer::check_security_system()
         }
     }
     for (auto distributed_server : m_distributed_servers) {
-        if (m_security_system_triggered)
+        if (m_security_system_triggered && !distributed_server.buzzer_alarm)
             send_message_to_distributed_server(distributed_server, "buzzer_alarm 1");
     }
 }

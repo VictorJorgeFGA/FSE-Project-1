@@ -8,7 +8,7 @@ SRCFOLDER := src/
 OBJFOLDER := obj/
 CC := g++
 CFLAGS := -std=c++11
-LINKFLAGS :=
+LINKFLAGS := -lm -lwiringPi
 SRCFILES := $(wildcard src/*.cpp)
 
 all: $(SRCFILES:src/%.cpp=obj/%.o)
